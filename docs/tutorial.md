@@ -1,6 +1,7 @@
 # Image Stitching: From Theory to Practice
 
-This guide explains the core concepts behind our image stitching implementation. We focus on the "why" and "how" of registering, warping, and blending images. **Note: This tutorial primarily discusses the simple case of stitching two images, but the concepts extend to multiple images (see Appendix C).**
+This guide explains the core concepts behind our image stitching implementation. We focus on the "why" and "how" of registering, warping, and blending images. 
+ **Note: This tutorial primarily discusses the simple case of stitching two images, but the concepts extend to multiple images (see Appendix C).** 
 
 ## 1. Registering Images
 
@@ -181,6 +182,8 @@ This is the ideal model for panoramas taken with a rotating camera. We first pro
 - $\theta = \arctan((x - w/2) / f)$
 - $x_{\text{cyl}} = f \cdot \theta + w/2$
 - $y_{\text{cyl}} = (y - h/2) \cdot \cos(\theta) + h/2$
+
+Once all images are projected onto the cylinder, aligning them becomes a simple matter of finding the **pure 2D translation** $(dx, dy)$ between the overlapping regions:
 
 ```python
 # do SIFT detections and get matched points
