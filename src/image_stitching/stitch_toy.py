@@ -50,35 +50,47 @@ class TwoImageToyStitcher:
 
         image2Warped = cv2.warpPerspective(image2,HOffset@H,(newXMax-newXMin,newYMax-newYMin))
         image1Warped = cv2.warpPerspective(image1,HOffset,(newXMax-newXMin,newYMax-newYMin))
-        mask1 = np.ones_like(image1)
-        mask1Warped = cv2.warpPerspective(mask1,HOffset,(newXMax-newXMin,newYMax-newYMin))
-        return image1Warped, image2Warped, mask1Warped
+        
+        # Create single-channel masks to track valid pixels
+        m1 = np.ones((h1, w1), dtype=np.uint8)
+        m2 = np.ones((h2, w2), dtype=np.uint8)
+        mask1Warped = cv2.warpPerspective(m1, HOffset, (newXMax-newXMin, newYMax-newYMin))
+        mask2Warped = cv2.warpPerspective(m2, HOffset@H, (newXMax-newXMin, newYMax-newYMin))
+        
+        return image1Warped, image2Warped, mask1Warped, mask2Warped
     
     def blend(self, image1, image2, mask):
+        # For simple blend, we still use the single mask provided
+        if len(image1.shape) == 3 and len(mask.shape) == 2:
+            mask = np.expand_dims(mask, axis=-1)
         return mask * image1 + (1-mask)*image2
     
-    def softBlend(self, image1, image2, mask):
-        # Erode mask to avoid boundary artifacts in Laplacian pyramid
-        # The goal is to move the transition away from the sharp edges of the warped images
-        kernel = np.ones((5,5), np.uint8)
-        eroded_mask = cv2.erode(mask.astype(np.uint8), kernel, iterations=3)
-        # Convert back to float for pyramid building
-        eroded_mask = eroded_mask.astype(np.float32)
+    def softBlend(self, image1, image2, mask1, mask2):
+        # Use Distance Transform to find the optimal seam in the middle of the overlap.
+        # This avoids artifacts caused by blending near sharp image boundaries.
+        dist1 = cv2.distanceTransform(mask1, cv2.DIST_L2, 3)
+        dist2 = cv2.distanceTransform(mask2, cv2.DIST_L2, 3)
+        
+        # Create a weight mask that is 1 where image1 is "closer" to its center than image2
+        # We use (dist1 + 1e-5) to handle non-overlap areas gracefully
+        weight_mask = (dist1 > dist2).astype(np.float32)
 
-        imagePyramid = ImagePyramid(5)
+        # Use 6 levels for smoother transition if the image size allows
+        levels = 6
+        imagePyramid = ImagePyramid(levels)
         gp1 = imagePyramid.buildGaussianPyramid(image1)
         gp2 = imagePyramid.buildGaussianPyramid(image2)
-        gpmask = imagePyramid.buildGaussianPyramid(eroded_mask)
+        gpmask = imagePyramid.buildGaussianPyramid(weight_mask)
 
         lp1 = imagePyramid.buildLaplacianPyramid(gp1)
         lp2 = imagePyramid.buildLaplacianPyramid(gp2)
 
         blendedLaplacianPyramid = []
         for l1, l2, m in zip(lp1, lp2, gpmask):
-            # Ensure mask has same number of channels as images for broadcasting
             if len(l1.shape) == 3 and len(m.shape) == 2:
                 m = np.expand_dims(m, axis=-1)
-            blendedLaplacianPyramid.append(m*l1+(1-m)*l2)
+            blendedLaplacianPyramid.append(m*l1 + (1-m)*l2)
+            
         return imagePyramid.reconstructFromLaplacianPyramid(blendedLaplacianPyramid)
         
     def stitchImage(self, imagePath1, imagePath2):
@@ -86,8 +98,8 @@ class TwoImageToyStitcher:
         descriptions = self._computeDescription(image1Gray,image2Gray)
         matchedPts1, matchedPts2 = self._matchDescription(*descriptions)
         H = self._computeHomography(matchedPts1,matchedPts2)
-        warpedImage1, warpedImage2, mask1 = self._warp(image1,image2,H)
-        stitchedImage = self.softBlend(warpedImage1, warpedImage2, mask1)
+        warpedImage1, warpedImage2, mask1, mask2 = self._warp(image1,image2,H)
+        stitchedImage = self.softBlend(warpedImage1, warpedImage2, mask1, mask2)
         return stitchedImage
 
 if __name__ == '__main__':

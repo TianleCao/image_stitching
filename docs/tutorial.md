@@ -64,15 +64,16 @@ $$ \text{Image 2}_{\text{warped}} = \text{warpPerspective}(\text{Image 2}, \math
 Once warped, we have two aligned images on the same canvas. Simply pasting one over the other creates a harsh, visible seam due to exposure differences and lens vignetting.
 
 We solve this using **Laplacian Pyramid Blending**:
-1. **Gaussian Pyramids**: We build a Gaussian pyramid for both warped images and a generated binary mask. To avoid artifacts from the sharp image boundaries, we slightly **erode** the mask first. This ensures the transition happens in a region where both images have valid data.
-2. **Laplacian Pyramids**: From the Gaussian pyramids, we build Laplacian pyramids, which capture the high-frequency details (edges) at each scale.
-3. **Multi-band Blending**: We blend the Laplacian levels of the two images together using the Gaussian pyramid of the mask as the weights.
-4. **Reconstruction**: Finally, we collapse the blended Laplacian pyramid back into a single, high-resolution image. 
+We solve this using **Laplacian Pyramid Blending**:
+1. **Seam Finding (Distance Transform)**: To avoid artifacts from the sharp image boundaries, we don't just blend at the edge of the image. Instead, we compute a "distance transform" for both images (the distance of each pixel to its respective boundary). We place the blending seam exactly in the middle of the overlap—where both images have the most reliable data.
+2. **Gaussian Pyramids**: We build a Gaussian pyramid for both warped images and our calculated weight mask.
+3. **Laplacian Pyramids**: From the Gaussian pyramids, we build Laplacian pyramids, which capture the high-frequency details (edges) at each scale.
+4. **Multi-band Blending**: We blend the Laplacian levels of the two images together using the Gaussian pyramid of the mask as the weights.
+5. **Reconstruction**: Finally, we collapse the blended Laplacian pyramid back into a single, high-resolution image. 
 
 ![Fig 4: Blending Comparison](../imgs/fig4.jpg)
-<br>
 
-This technique smoothly transitions low frequencies (like sky colors) over a wide area, while transitioning high frequencies (like sharp edges) over a very narrow area, effectively hiding the seam!
+This technique (Multi-band Blending) smoothly transitions low frequencies (like sky colors) over a wide area, while transitioning high frequencies (like sharp edges) over a very narrow area. By combining this with a distance-transform seam, we eliminate ghosting and visible seams!
 
 ---
 
