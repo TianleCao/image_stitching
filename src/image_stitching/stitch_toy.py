@@ -58,16 +58,26 @@ class TwoImageToyStitcher:
         return mask * image1 + (1-mask)*image2
     
     def softBlend(self, image1, image2, mask):
+        # Erode mask to avoid boundary artifacts in Laplacian pyramid
+        # The goal is to move the transition away from the sharp edges of the warped images
+        kernel = np.ones((5,5), np.uint8)
+        eroded_mask = cv2.erode(mask.astype(np.uint8), kernel, iterations=3)
+        # Convert back to float for pyramid building
+        eroded_mask = eroded_mask.astype(np.float32)
+
         imagePyramid = ImagePyramid(5)
         gp1 = imagePyramid.buildGaussianPyramid(image1)
         gp2 = imagePyramid.buildGaussianPyramid(image2)
-        gpmask = imagePyramid.buildGaussianPyramid(mask)
+        gpmask = imagePyramid.buildGaussianPyramid(eroded_mask)
 
         lp1 = imagePyramid.buildLaplacianPyramid(gp1)
         lp2 = imagePyramid.buildLaplacianPyramid(gp2)
 
         blendedLaplacianPyramid = []
         for l1, l2, m in zip(lp1, lp2, gpmask):
+            # Ensure mask has same number of channels as images for broadcasting
+            if len(l1.shape) == 3 and len(m.shape) == 2:
+                m = np.expand_dims(m, axis=-1)
             blendedLaplacianPyramid.append(m*l1+(1-m)*l2)
         return imagePyramid.reconstructFromLaplacianPyramid(blendedLaplacianPyramid)
         

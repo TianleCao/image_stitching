@@ -64,7 +64,7 @@ $$ \text{Image 2}_{\text{warped}} = \text{warpPerspective}(\text{Image 2}, \math
 Once warped, we have two aligned images on the same canvas. Simply pasting one over the other creates a harsh, visible seam due to exposure differences and lens vignetting.
 
 We solve this using **Laplacian Pyramid Blending**:
-1. **Gaussian Pyramids**: We build a Gaussian pyramid for both warped images and a generated binary mask. The Gaussian pyramid successively blurs and downsamples the image.
+1. **Gaussian Pyramids**: We build a Gaussian pyramid for both warped images and a generated binary mask. To avoid artifacts from the sharp image boundaries, we slightly **erode** the mask first. This ensures the transition happens in a region where both images have valid data.
 2. **Laplacian Pyramids**: From the Gaussian pyramids, we build Laplacian pyramids, which capture the high-frequency details (edges) at each scale.
 3. **Multi-band Blending**: We blend the Laplacian levels of the two images together using the Gaussian pyramid of the mask as the weights.
 4. **Reconstruction**: Finally, we collapse the blended Laplacian pyramid back into a single, high-resolution image. 
