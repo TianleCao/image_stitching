@@ -1,4 +1,9 @@
-# Image Stitching: From Theory to Practice
+---
+title: "Tutorial on Image Stitching: From Theory to Practice"
+description: "A deep dive into homography, warping, and blending for panoramic views."
+date: "Apr 25 2026"
+---
+# Tutorial on Image Stitching: From Theory to Practice
 
 This guide explains the core concepts behind our image stitching implementation. We focus on the "why" and "how" of registering, warping, and blending images. 
  **Note: This tutorial primarily discusses the simple case of stitching two images, but the concepts extend to multiple images (see Appendix C).** 
