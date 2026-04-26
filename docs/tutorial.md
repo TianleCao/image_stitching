@@ -29,22 +29,16 @@ In image stitching, we are in the case of **pure camera rotation** because usual
 
 Because there is no translation, the 3D depth of the scene doesn't matter, and the mapping between the two images is a pure homography. *(See the Appendix for the mathematical proof).*
 
-Using RANSAC (Random Sample Consensus) along with our matched features, we can robustly estimate this homography matrix $\mathbf{H}_{2 \to 1}$, which maps pixels from Image 2 to Image 1.
-
 ## 3. Warping the Images
 
-Once we have $\mathbf{H}_{2 \to 1}$, we must "warp" Image 2 so it aligns with Image 1. However, we can't just apply $\mathbf{H}_{2 \to 1}$ directly and call it a day, because the warped Image 2 might end up with negative coordinates or get clipped outside the standard image boundaries.
+Once we have our homography $\mathbf{H}_{2 \to 1}$, we must "warp" Image 2 so it aligns with Image 1. 
 
 ### Redefining the Canvas Boundary
 
 To ensure both images fit into a single canvas without cropping:
-1. We calculate the coordinates of the four corners of Image 2 after applying the homography $\mathbf{H}_{2 \to 1}$.
-2. We find the global minimum and maximum $x$ and $y$ coordinates across the corners of *both* the original Image 1 and the warped Image 2.
-3. If the minimum $x$ or $y$ is negative, it means the warped image extends to the top or left of Image 1. We must introduce a **Translation Matrix (Offset)** to shift everything into positive coordinates:
-
-$$
-\mathbf{H}_{\text{offset}} = \begin{bmatrix} 1 & 0 & -x_{\min} \\ 0 & 1 & -y_{\min} \\ 0 & 0 & 1 \end{bmatrix}
-$$
+1. We calculate the new coordinates of Image 2's corners using $\mathbf{H}_{2 \to 1}$.
+2. We find the global minimum and maximum coordinates ($x_{\min}, y_{\min}$, etc.) across both images.
+3. We shift the entire coordinate system by $-x_{\min}$ and $-y_{\min}$ using a **Translation Matrix ($\mathbf{H}_{\text{offset}}$)** to ensure all pixels have positive coordinates.
 
 ### Applying the Warps
 
@@ -57,43 +51,45 @@ $$ \text{Image 2}_{\text{warped}} = \text{warpPerspective}(\text{Image 2}, \math
 ![Fig 3: Warped Images](../imgs/fig3.jpg)
 <br>
 
-*(Under the hood, `warpPerspective` performs **inverse warping**: iterating over the new canvas coordinates, applying the inverse matrix to find the source coordinate, and using bilinear interpolation to sample the color).*
+## 4. Simple Blending: Defining the Mask
 
-## 4. Blending
+Once warped, we have two aligned images. To combine them, we need to decide which image to use for each pixel on the canvas. We do this using a **Mask** ($M$).
 
-Once warped, we have two aligned images on the same canvas. Simply pasting one over the other creates a harsh, visible seam due to exposure differences and lens vignetting.
+### What is a Mask?
+A mask is a grayscale image of the same size as our canvas where:
+- A value of **1 (White)** means "Use Image 1".
+- A value of **0 (Black)** means "Use Image 2".
 
-We solve this using **Laplacian Pyramid Blending**:
-We solve this using **Laplacian Pyramid Blending**:
-1. **Seam Finding (Distance Transform)**: To avoid artifacts from the sharp image boundaries, we don't just blend at the edge of the image. Instead, we compute a "distance transform" for both images (the distance of each pixel to its respective boundary). We place the blending seam exactly in the middle of the overlap—where both images have the most reliable data.
-2. **Gaussian Pyramids**: We build a Gaussian pyramid for both warped images and our calculated weight mask.
-3. **Laplacian Pyramids**: From the Gaussian pyramids, we build Laplacian pyramids, which capture the high-frequency details (edges) at each scale.
-4. **Multi-band Blending**: We blend the Laplacian levels of the two images together using the Gaussian pyramid of the mask as the weights.
-5. **Reconstruction**: Finally, we collapse the blended Laplacian pyramid back into a single, high-resolution image. 
+The final image $I$ is calculated as:
+$$ I = M \cdot I_1 + (1 - M) \cdot I_2 $$
 
-![Fig 4: Blending Comparison](../imgs/fig4.jpg)
+### Defining the Seam
+For a beginner, the simplest mask is a **Binary Mask** that splits the overlap right down the middle. If Image 1 is on the left and Image 2 is on the right, we find the horizontal center of the overlapping region and create a mask that is 1 to the left of that line and 0 to the right.
 
-This technique (Multi-band Blending) smoothly transitions low frequencies (like sky colors) over a wide area, while transitioning high frequencies (like sharp edges) over a very narrow area. By combining this with a distance-transform seam, we eliminate ghosting and visible seams!
+![Fig 4: Simple Mask and Result](../imgs/fig4.jpg)
+<br>
+
+While simple, this often leaves a visible "seam" because the two images might have slightly different brightness or colors. To solve this, we can use more advanced techniques like Laplacian Pyramids (see Appendix B).
 
 ---
 
-## Appendix: Proof that Pure Camera Rotation is a Homography
+## Appendix A: Proof that Pure Camera Rotation is a Homography
 
 Let a 3D point be $\mathbf{P} = [X, Y, Z]^T$. 
-A camera projects this 3D point onto a 2D pixel coordinate $\mathbf{p} = [x, y, 1]^T$ (in homogeneous coordinates) using the camera intrinsic matrix $\mathbf{K}$ and its rotation $\mathbf{R}$ and translation $\mathbf{t}$.
+A camera projects this 3D point onto a 2D pixel coordinate $\mathbf{p} = [x, y, 1]^T$ using its intrinsic matrix $\mathbf{K}$ and rotation $\mathbf{R}$.
 
-If the first camera is at the origin with no rotation, its projection equation is:
-$$ \lambda_1 \mathbf{p}_1 = \mathbf{K}_1 [\mathbf{I} \mid \mathbf{0}] \begin{bmatrix} \mathbf{P} \\ 1 \end{bmatrix} = \mathbf{K}_1 \mathbf{P} $$
-which gives $\mathbf{P} = \lambda_1 \mathbf{K}_1^{-1} \mathbf{p}_1$.
+If the first camera is at the origin: $\lambda_1 \mathbf{p}_1 = \mathbf{K}_1 \mathbf{P}$.
+If the second camera is rotated by $\mathbf{R}$: $\lambda_2 \mathbf{p}_2 = \mathbf{K}_2 \mathbf{R} \mathbf{P}$.
 
-If the second camera shares the exact same center but is rotated by $\mathbf{R}$, its projection is:
-$$ \lambda_2 \mathbf{p}_2 = \mathbf{K}_2 [\mathbf{R} \mid \mathbf{0}] \begin{bmatrix} \mathbf{P} \\ 1 \end{bmatrix} = \mathbf{K}_2 \mathbf{R} \mathbf{P} $$
+Substituting $\mathbf{P}$:
+$$ \frac{\lambda_2}{\lambda_1} \mathbf{p}_2 = (\mathbf{K}_2 \mathbf{R} \mathbf{K}_1^{-1}) \mathbf{p}_1 \Rightarrow \mathbf{H} = \mathbf{K}_2 \mathbf{R} \mathbf{K}_1^{-1} $$
 
-Substituting $\mathbf{P}$ from the first equation into the second:
-$$ \lambda_2 \mathbf{p}_2 = \mathbf{K}_2 \mathbf{R} (\lambda_1 \mathbf{K}_1^{-1} \mathbf{p}_1) $$
-$$ \frac{\lambda_2}{\lambda_1} \mathbf{p}_2 = (\mathbf{K}_2 \mathbf{R} \mathbf{K}_1^{-1}) \mathbf{p}_1 $$
+## Appendix B: Advanced Blending (Laplacian Pyramids)
 
-Since homogeneous coordinates are scale-invariant, the scalar $\frac{\lambda_2}{\lambda_1}$ doesn't change the 2D point. Therefore, the pixels are related by a $3 \times 3$ linear transformation matrix:
-$$ \mathbf{H} = \mathbf{K}_2 \mathbf{R} \mathbf{K}_1^{-1} $$
+To eliminate visible seams, we use **Multi-band Blending**:
+1. **Seam Finding**: Use a **Distance Transform** to find the center-line of the overlap. This creates a more robust "weight mask" where each pixel is assigned to the image it is "deepest" inside of.
+2. **Pyramid Decomposition**: We break both images and the mask into **Gaussian and Laplacian Pyramids**. 
+3. **Multi-scale Blending**: We blend the images level-by-level. This allows us to blend low-frequency color changes over a wide area while keeping high-frequency details sharp.
+4. **Reconstruction**: Collapsing the blended levels creates a seamless, professional result.
 
-This proves that for pure camera rotation, the mapping between the two images is purely a homography $\mathbf{H}$, entirely independent of the depth $Z$ of the 3D point $\mathbf{P}$!
+*(See our `softBlend` implementation in `stitch_toy.py` for the full code).*
