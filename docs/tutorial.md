@@ -1,6 +1,6 @@
 # Image Stitching: From Theory to Practice
 
-This guide explains the core concepts behind our image stitching implementation. We focus on the "why" and "how" of registering, warping, and blending images.
+This guide explains the core concepts behind our image stitching implementation. We focus on the "why" and "how" of registering, warping, and blending images. **Note: This tutorial primarily discusses the simple case of stitching two images, but the concepts extend to multiple images (see Appendix C).**
 
 ## 1. Registering Images
 
@@ -96,12 +96,22 @@ final_image = mask * warped1 + (1 - mask) * warped2
 ```
 
 ### Defining the Seam
-The simplest mask is a **Binary Mask** that splits the overlap right down the middle. If Image 1 is on the left and Image 2 is on the right, we find the horizontal center of the overlapping region and create a mask that is 1 to the left of that line and 0 to the right.
+For a beginner, the simplest mask is a **Binary Mask** that splits the overlap right down the middle. If Image 1 is on the left and Image 2 is on the right, we find the horizontal center of the overlapping region and create a mask that is 1 to the left of that line and 0 to the right.
 
 ![Fig 4: Simple Mask and Result](../imgs/fig4.jpg)
 <br>
 
 While simple, this often leaves a visible "seam" because the two images might have slightly different brightness or colors. To solve this, we can use more advanced techniques like Laplacian Pyramids (see Appendix B).
+
+---
+
+## Known Limitations
+
+This repository is designed for educational purposes and implements a "Minimum Viable Stitcher." Professional pipelines handle the following scenarios:
+
+1. **Sequential Matching (Chaining):** Currently, all images are matched directly against a central "Anchor" image. For long panoramas where the first and last images do not overlap with the center, this will fail. Professional tools match adjacent pairs ($1 \to 2$, $2 \to 3$) and **chain** the transformations.
+2. **Cylindrical Wave Patterns:** In `CylindricalStitcher`, the top and bottom edges of the panorama appear wavy. This is a natural result of projecting flat edges onto a cylinder. Standard software uses **Auto-Cropping** to find the largest interior rectangle or global straightening to level the horizon.
+3. **Exposure Compensation:** We use multi-band blending to hide seams, but we do not perform global color or exposure correction. Significant differences in lighting between photos may still result in visible gradients.
 
 ---
 
@@ -150,3 +160,36 @@ result = reconstruct_from_pyramid(blended_lp)
 As seen below, Laplacian blending (right) effectively hides the exposure differences and seam artifacts that are visible in simple binary blending (left).
 
 ![Fig 5: Simple vs Advanced Blending](../imgs/fig5.jpg)
+
+## Appendix C: Multi-Image Stitching Strategies
+
+When stitching more than two images, we have two primary implementation options:
+
+### 1. The Anchor Approach (Used in this repo)
+We select a central image as the "Anchor" reference. All other images are matched and warped directly into this image's coordinate space.
+
+**Benefit:** Simple to implement and prevents "drifting" since all images relate to the same coordinate system.
+**Limitation:** It only works for short sequences (3-5 images). If the first and last images do not overlap with the central anchor, feature matching will fail.
+
+![Fig 6: Multi-Image Planar Result](../imgs/fig6.jpg)
+<br>
+
+### 2. The Chaining Approach
+We match adjacent pairs ($1 \to 2$, $2 \to 3$, $3 \to 4$) and "chain" the transformations. For example, to map Image 4 to Image 1, we use $\mathbf{H}_{4 \to 1} = \mathbf{H}_{2 \to 1} \mathbf{H}_{3 \to 2} \mathbf{H}_{4 \to 3}$.
+
+**Benefit:** Scales to very long panoramas ($360^\circ$ views).
+**Limitation:** Small errors in matching compound over time, leading to significant "drift" or distortion at the ends.
+
+### 3. Cylindrical Stitching (Rotation-Only Case)
+Cylindrical stitching is the ideal model for pure camera rotation. 
+
+**The Math:** We project planar pixel coordinates $(x, y)$ onto a cylinder with radius $f$ (focal length):
+- $\theta = \arctan((x - w/2) / f)$
+- $h = (y - h/2) / \sqrt{(x - w/2)^2 + f^2}$
+- $x_{\text{cyl}} = f \cdot \theta + w/2$
+- $y_{\text{cyl}} = f \cdot h + h/2$
+
+**Benefit:** Once projected onto the cylinder, the relationship between all images becomes a **pure 2D translation** $(dx, dy)$, which simplifies the alignment significantly and prevents the "infinite stretching" seen in planar homographies for wide views.
+
+![Fig 7: Multi-Image Cylindrical Result](../imgs/fig7.jpg)
+<br>

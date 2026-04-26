@@ -72,7 +72,6 @@ class TwoImageToyStitcher:
         dist2 = cv2.distanceTransform(mask2, cv2.DIST_L2, 3)
         
         # Create a weight mask that is 1 where image1 is "closer" to its center than image2
-        # We use (dist1 + 1e-5) to handle non-overlap areas gracefully
         weight_mask = (dist1 > dist2).astype(np.float32)
 
         # Use 6 levels for smoother transition if the image size allows

@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "docs/tutorial.md",
+                "file": "docs/Tutorial.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "tutorial"
+              "title": "Tutorial"
             }
           }
         ]
@@ -94,7 +94,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "docs/tutorial.md",
+                "file": "docs/Tutorial.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -104,7 +104,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for tutorial"
+              "title": "Backlinks for Tutorial"
             }
           },
           {
@@ -113,12 +113,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "docs/tutorial.md",
+                "file": "docs/Tutorial.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Outgoing links from tutorial"
+              "title": "Outgoing links from Tutorial"
             }
           },
           {
@@ -156,13 +156,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "docs/tutorial.md",
+                "file": "docs/Tutorial.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of tutorial"
+              "title": "Outline of Tutorial"
             }
           }
         ]
@@ -185,6 +185,13 @@
   },
   "active": "274f0ea67d4c9d60",
   "lastOpenFiles": [
+    "imgs/fig7.jpg",
+    "imgs/fig6.jpg",
+    "generate_multi_images.py",
+    "src/image_stitching/__pycache__/stitch_utils.cpython-314.pyc",
+    "src/image_stitching/stitch_utils.py",
+    "notebooks/multiple_image_stitch.ipynb",
+    "src/image_stitching/stitch.py",
     "generate_tutorial_images.py",
     "imgs/fig5.jpg"
   ]
