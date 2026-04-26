@@ -105,16 +105,6 @@ While simple, this often leaves a visible "seam" because the two images might ha
 
 ---
 
-## Known Limitations
-
-This repository is designed for educational purposes and implements a "Minimum Viable Stitcher." Professional pipelines handle the following scenarios:
-
-1. **Sequential Matching (Chaining):** Currently, all images are matched directly against a central "Anchor" image. For long panoramas where the first and last images do not overlap with the center, this will fail. Professional tools match adjacent pairs ($1 \to 2$, $2 \to 3$) and **chain** the transformations.
-2. **Cylindrical Wave Patterns:** In `CylindricalStitcher`, the top and bottom edges of the panorama appear wavy. This is a natural result of projecting flat edges onto a cylinder. Standard software uses **Auto-Cropping** to find the largest interior rectangle or global straightening to level the horizon.
-3. **Exposure Compensation:** We use multi-band blending to hide seams, but we do not perform global color or exposure correction. Significant differences in lighting between photos may still result in visible gradients.
-
----
-
 ## Appendix A: Proof that Pure Camera Rotation is a Homography
 
 Let a 3D point be $\mathbf{P} = [X, Y, Z]^T$. 
@@ -163,33 +153,31 @@ As seen below, Laplacian blending (right) effectively hides the exposure differe
 
 ## Appendix C: Multi-Image Stitching Strategies
 
-When stitching more than two images, we have two primary implementation options:
+When stitching more than two images, we have two primary implementation options in this repository:
 
-### 1. The Anchor Approach (Used in this repo)
-We select a central image as the "Anchor" reference. All other images are matched and warped directly into this image's coordinate space.
-
-**Benefit:** Simple to implement and prevents "drifting" since all images relate to the same coordinate system.
-**Limitation:** It only works for short sequences (3-5 images). If the first and last images do not overlap with the central anchor, feature matching will fail.
+### 1. Planar Multi-Image Stitching
+This approach extends the 2-image homography logic. We select a central image as the **"Anchor"** reference and match all other images directly to it.
 
 ![Fig 6: Multi-Image Planar Result](../imgs/fig6.jpg)
 <br>
 
-### 2. The Chaining Approach
-We match adjacent pairs ($1 \to 2$, $2 \to 3$, $3 \to 4$) and "chain" the transformations. For example, to map Image 4 to Image 1, we use $\mathbf{H}_{4 \to 1} = \mathbf{H}_{2 \to 1} \mathbf{H}_{3 \to 2} \mathbf{H}_{4 \to 3}$.
+**Limitations:**
+- **Range Limitation:** This only works for short sequences (3-5 images). If the first and last images do not overlap with the central anchor, feature matching will fail.
+- **Geometric Distortion:** For wide fields of view, the planar projection causes "infinite stretching" at the edges.
+- **Alignment Strategy:** A more robust strategy for long sequences is **"Chaining"** (matching adjacent pairs $1 \to 2$, $2 \to 3$), but this is prone to "drift" (accumulated errors).
 
-**Benefit:** Scales to very long panoramas ($360^\circ$ views).
-**Limitation:** Small errors in matching compound over time, leading to significant "drift" or distortion at the ends.
+### 2. Cylindrical Multi-Image Stitching
+This is the ideal model for panoramas taken with a rotating camera. We first project each planar image onto a cylinder before aligning them.
 
-### 3. Cylindrical Stitching (Rotation-Only Case)
-Cylindrical stitching is the ideal model for pure camera rotation. 
-
-**The Math:** We project planar pixel coordinates $(x, y)$ onto a cylinder with radius $f$ (focal length):
+**The Math:** We project planar coordinates $(x, y)$ onto a cylinder with radius $f$:
 - $\theta = \arctan((x - w/2) / f)$
-- $h = (y - h/2) / \sqrt{(x - w/2)^2 + f^2}$
 - $x_{\text{cyl}} = f \cdot \theta + w/2$
-- $y_{\text{cyl}} = f \cdot h + h/2$
-
-**Benefit:** Once projected onto the cylinder, the relationship between all images becomes a **pure 2D translation** $(dx, dy)$, which simplifies the alignment significantly and prevents the "infinite stretching" seen in planar homographies for wide views.
+- $y_{\text{cyl}} = (y - h/2) \cdot \cos(\theta) + h/2$
 
 ![Fig 7: Multi-Image Cylindrical Result](../imgs/fig7.jpg)
 <br>
+
+**Benefits & Limitations:**
+- **Benefit:** Once on the cylinder, the relationship between images becomes a **pure 2D translation** $(dx, dy)$, which is much simpler to estimate and prevents edge stretching.
+- **Limitation (Wavy Boundaries):** The top and bottom edges of the panorama appear wavy because straight lines in the original images become curves on the cylinder. Standard software uses **Auto-Cropping** to fix this.
+- **Limitation (Focal Length):** This method requires an accurate estimate of the camera's focal length ($f$) to project the curves correctly.
