@@ -112,3 +112,32 @@ class PlanarStitcher(Stitcher):
         warped_images, masks = warp(images, homography)
         stitchedImage = softBlend(warped_images, masks)
         return stitchedImage
+
+if __name__ == '__main__':
+    # Demonstration CLI
+    import os
+    
+    # Calculate paths relative to this script's location
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    root_dir = os.path.dirname(os.path.dirname(script_dir))
+    img_dir = os.path.join(root_dir, 'imgs')
+    
+    factory = StitcherFactory()
+    image_paths = [os.path.join(img_dir, f'{i}.jpg') for i in [1, 2, 3]]
+    
+    print("Executing Multi-Image Planar Stitching...")
+    planar_stitcher = factory.createStitcher('planar')
+    planar_result = planar_stitcher.stitch(image_paths)
+    planar_out = os.path.join(img_dir, 'planar_panorama_result.jpg')
+    cv2.imwrite(planar_out, np.clip(planar_result, 0, 255).astype(np.uint8))
+    print(f"Planar result saved to: {planar_out}")
+    
+    print("\nExecuting Multi-Image Cylindrical Stitching...")
+    cyl_stitcher = factory.createStitcher('cylindrical')
+    cyl_result = cyl_stitcher.stitch(image_paths)
+    cyl_out = os.path.join(img_dir, 'cylindrical_panorama_result.jpg')
+    cv2.imwrite(cyl_out, np.clip(cyl_result, 0, 255).astype(np.uint8))
+    print(f"Cylindrical result saved to: {cyl_out}")
+    
+    print("\nProcessing complete.")
+
