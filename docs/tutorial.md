@@ -9,8 +9,8 @@ To stitch two images together, we first need to "register" them—that is, figur
 ![Fig 1: Original Images](../imgs/fig1.jpg)
 <br>
 
-1. **Feature Detection**: We use algorithms like SIFT to find distinctive keypoints in both images.
-2. **Feature Matching**: We match keypoints across images using their descriptors.
+1. **Feature Detection**: We use algorithms like SIFT (Scale-Invariant Feature Transform) to find distinctive keypoints (like corners or high-contrast spots) in both images.
+2. **Feature Matching**: Each keypoint comes with a "descriptor" (a vector describing its local neighborhood). We match keypoints across images by finding descriptors with the smallest distance (e.g., using K-Nearest Neighbors and Lowe's ratio test).
    
 ```python
 # Detect SIFT features
@@ -26,15 +26,44 @@ good_matches = [m for m, n in matches if m.distance < n.distance * 0.7]
 ![Fig 2: Feature Matching](../imgs/fig2.jpg)
 <br>
 
-3. **Transformation Estimation**: We estimate a **Homography** matrix that maps points from Image 2 to Image 1.
+3. **Transformation Estimation**: Given these matching point pairs, we estimate a transformation matrix that maps points from Image 2's coordinate space to Image 1's coordinate space. 
 
 ## 2. Why Homography?
 
-Generally, the transformation between two images of a 3D scene is complex. However, in image stitching, we usually assume **pure camera rotation**. Because the camera center doesn't move, the mapping between images is perfectly described by a $3 \times 3$ Homography matrix $\mathbf{H}$, regardless of scene depth.
+Generally, the transformation between two images of a 3D scene taken from different viewpoints is complex and depends heavily on the distance to the objects (depth) in the scene. This relationship is typically described using Epipolar Geometry (e.g., via the Fundamental Matrix). 
+
+However, there are two specific cases where the transformation between pixel coordinates in two images can be perfectly described by a much simpler $3 \times 3$ matrix called a **Homography**:
+1. **Planar Scene:** The cameras are viewing a completely flat, 2D plane (e.g., taking a picture of a painting, a document, or a completely flat wall).
+2. **Pure Camera Rotation:** The cameras are located at the exact same point in 3D space, but are rotated and/or zoomed. There is no translation (movement) of the camera's optical center.
+
+In image stitching, we are in the case of **pure camera rotation** because usually, multiple images taken for a panorama can be approximated as rotating the camera around its optical center without translation (like a photographer standing still and turning, or using a tripod). 
+
+Because there is no translation, the 3D depth of the scene doesn't matter, and the mapping between the two images is a pure homography. *(See Appendix A for the mathematical proof).*
+
+Using RANSAC (Random Sample Consensus) along with our matched features, we can robustly estimate this homography matrix $\mathbf{H}_{2 \to 1}$, which maps pixels from Image 2 to Image 1.
 
 ## 3. Warping the Images
 
-We must warp Image 2 to align with Image 1. To fit both on a single canvas, we shift the coordinates using a translation matrix $\mathbf{H}_{\text{offset}}$ derived from the bounding box of both images.
+Once we have our homography $\mathbf{H}_{2 \to 1}$, we must "warp" Image 2 so it aligns with Image 1. 
+
+### Redefining the Canvas Boundary
+
+To ensure both images fit into a single canvas without cropping:
+1. We calculate the new coordinates of Image 2's corners using $\mathbf{H}_{2 \to 1}$.
+2. We find the global minimum and maximum coordinates ($x_{\min}, y_{\min}$, etc.) across both the original Image 1 and the warped Image 2.
+3. If the minimum $x$ or $y$ is negative, it means the warped image extends to the top or left of Image 1. We must introduce a **Translation Matrix (Offset)** to shift everything into positive coordinates:
+
+$$
+\mathbf{H}_{\text{offset}} = \begin{bmatrix} 1 & 0 & -x_{\min} \\ 0 & 1 & -y_{\min} \\ 0 & 0 & 1 \end{bmatrix}
+$$
+
+### Applying the Warps
+
+To warp Image 1 onto the new canvas, we just apply the translation:
+$$ \text{Image 1}_{\text{warped}} = \text{warpPerspective}(\text{Image 1}, \mathbf{H}_{\text{offset}}) $$
+
+To warp Image 2, we combine the homography and the translation:
+$$ \text{Image 2}_{\text{warped}} = \text{warpPerspective}(\text{Image 2}, \mathbf{H}_{\text{offset}} \mathbf{H}_{2 \to 1}) $$
 
 ```python
 # Combine homography with canvas offset
@@ -47,28 +76,63 @@ warped2 = cv2.warpPerspective(image2, H_final, (canvas_w, canvas_h))
 ![Fig 3: Warped Images](../imgs/fig3.jpg)
 <br>
 
+*(Under the hood, `warpPerspective` performs **inverse warping**: iterating over the new canvas coordinates, applying the inverse matrix to find the source coordinate, and using bilinear interpolation to sample the color).*
+
 ## 4. Simple Blending: Defining the Mask
 
-Once warped, we combine them using a **Mask** ($M$). A value of 1 means "Use Image 1", and 0 means "Use Image 2".
+Once warped, we have two aligned images. To combine them, we need to decide which image to use for each pixel on the canvas. We do this using a **Mask** ($M$).
+
+### What is a Mask?
+A mask is a grayscale image of the same size as our canvas where:
+- A value of **1 (White)** means "Use Image 1".
+- A value of **0 (Black)** means "Use Image 2".
+
+The final image $I$ is calculated as:
+$$ I = M \cdot I_1 + (1 - M) \cdot I_2 $$
 
 ```python
 # Create a mask to define the seam
 final_image = mask * warped1 + (1 - mask) * warped2
 ```
 
+### Defining the Seam
+The simplest mask is a **Binary Mask** that splits the overlap right down the middle. If Image 1 is on the left and Image 2 is on the right, we find the horizontal center of the overlapping region and create a mask that is 1 to the left of that line and 0 to the right.
+
 ![Fig 4: Simple Mask and Result](../imgs/fig4.jpg)
 <br>
 
-While simple, a binary mask often leaves a visible seam due to color differences. Advanced techniques like Laplacian blending (Appendix B) can hide these.
+While simple, this often leaves a visible "seam" because the two images might have slightly different brightness or colors. To solve this, we can use more advanced techniques like Laplacian Pyramids (see Appendix B).
 
 ---
 
-## Appendix A: Proof of Homography for Rotation
-Pixels are related by: $\mathbf{H} = \mathbf{K}_2 \mathbf{R} \mathbf{K}_1^{-1}$.
+## Appendix A: Proof that Pure Camera Rotation is a Homography
+
+Let a 3D point be $\mathbf{P} = [X, Y, Z]^T$. 
+A camera projects this 3D point onto a 2D pixel coordinate $\mathbf{p} = [x, y, 1]^T$ (in homogeneous coordinates) using the camera intrinsic matrix $\mathbf{K}$ and its rotation $\mathbf{R}$ and translation $\mathbf{t}$.
+
+If the first camera is at the origin with no rotation, its projection equation is:
+$$ \lambda_1 \mathbf{p}_1 = \mathbf{K}_1 [\mathbf{I} \mid \mathbf{0}] \begin{bmatrix} \mathbf{P} \\ 1 \end{bmatrix} = \mathbf{K}_1 \mathbf{P} $$
+which gives $\mathbf{P} = \lambda_1 \mathbf{K}_1^{-1} \mathbf{p}_1$.
+
+If the second camera shares the exact same center but is rotated by $\mathbf{R}$, its projection is:
+$$ \lambda_2 \mathbf{p}_2 = \mathbf{K}_2 [\mathbf{R} \mid \mathbf{0}] \begin{bmatrix} \mathbf{P} \\ 1 \end{bmatrix} = \mathbf{K}_2 \mathbf{R} \mathbf{P} $$
+
+Substituting $\mathbf{P}$ from the first equation into the second:
+$$ \lambda_2 \mathbf{p}_2 = \mathbf{K}_2 \mathbf{R} (\lambda_1 \mathbf{K}_1^{-1} \mathbf{p}_1) $$
+$$ \frac{\lambda_2}{\lambda_1} \mathbf{p}_2 = (\mathbf{K}_2 \mathbf{R} \mathbf{K}_1^{-1}) \mathbf{p}_1 $$
+
+Since homogeneous coordinates are scale-invariant, the scalar $\frac{\lambda_2}{\lambda_1}$ doesn't change the 2D point. Therefore, the pixels are related by a $3 \times 3$ linear transformation matrix:
+$$ \mathbf{H} = \mathbf{K}_2 \mathbf{R} \mathbf{K}_1^{-1} $$
+
+This proves that for pure camera rotation, the mapping between the two images is purely a homography $\mathbf{H}$, entirely independent of the depth $Z$ of the 3D point $\mathbf{P}$!
 
 ## Appendix B: Advanced Blending (Laplacian Pyramids)
 
-Multi-band blending allows us to transition low frequencies over a wide area and high frequencies over a narrow area.
+To eliminate visible seams, we use **Multi-band Blending**:
+1. **Seam Finding (Distance Transform)**: To avoid artifacts from the sharp image boundaries, we compute a "distance transform" for both images. We place the blending seam exactly in the middle of the overlap—where both images have the most reliable data.
+2. **Pyramid Decomposition**: We break both images and the weight mask into **Gaussian and Laplacian Pyramids**. 
+3. **Multi-scale Blending**: We blend the Laplacian levels scale-by-scale. This allows us to blend low-frequency color changes over a wide area while keeping high-frequency details sharp and localized.
+4. **Reconstruction**: Collapsing the blended levels creates a seamless, professional result.
 
 ```python
 # Build pyramids
