@@ -158,6 +158,14 @@ When stitching more than two images, we have two primary implementation options 
 ### 1. Planar Multi-Image Stitching
 This approach extends the 2-image homography logic. We select a central image as the **"Anchor"** reference and match all other images directly to it.
 
+```python
+# Select anchor index
+ref_index = len(images) // 2
+# Match every image to the same anchor
+for i in range(len(images)):
+    H = cv2.findHomography(pts_moving, pts_anchor, cv2.RANSAC)
+```
+
 ![Fig 6: Multi-Image Planar Result](../imgs/fig6.jpg)
 <br>
 
@@ -173,6 +181,21 @@ This is the ideal model for panoramas taken with a rotating camera. We first pro
 - $\theta = \arctan((x - w/2) / f)$
 - $x_{\text{cyl}} = f \cdot \theta + w/2$
 - $y_{\text{cyl}} = (y - h/2) \cdot \cos(\theta) + h/2$
+
+```python
+# do SIFT detections and get matched points
+# ...
+
+# Project planar image to cylindrical surface
+cylindrical_img = cv2.remap(planar_img, x_src, y_src, cv2.INTER_LINEAR)
+
+# transform points coords to cylindrical space
+# ...
+
+# Align in cylindrical space (Pure 2D translation)
+shift = np.median(pts_ref - pts_moving, axis=0)
+H = np.array([[1, 0, shift[0]], [0, 1, shift[1]], [0, 0, 1]])
+```
 
 ![Fig 7: Multi-Image Cylindrical Result](../imgs/fig7.jpg)
 <br>
