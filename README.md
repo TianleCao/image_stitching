@@ -1,16 +1,16 @@
 # Image Stitching: Theory and Implementation
 
-This repository documents a comprehensive learning journey into the world of image stitching. It provides a complete, modular, and runnable implementation of both planar and cylindrical image stitching, accompanied by a detailed mathematical tutorial.
+This repository documents my learning into image stitching. I attached a runnable implementation of both planar and cylindrical image stitching, accompanied by a detailed learning note covering the overall process and math, alongwith some problems I ran into.
 
 ## Project Structure
 
 - `src/image_stitching/`: Core Python implementation.
-  - `stitch_toy.py`: A simple, beginner-friendly implementation for stitching two images.
+  - `stitch_toy.py`: A simple implementation for stitching two images, as proof of concept
   - `stitch.py`: A modular, factory-based stitcher supporting multiple images (Planar & Cylindrical).
   - `stitch_utils.py`: Geometric transformations (Homography, Cylindrical projection) and warping logic.
   - `pyramid.py`: Laplacian and Gaussian pyramid implementation for professional-grade blending.
-- `docs/`: In-depth educational material.
-  - `tutorial.md`: A fully illustrated guide covering registration, homography vs. epipolar geometry, warping boundaries, and multi-band blending.
+- `docs/`: Learing notes.
+  - `tutorial.md`: Fully illustrated learning notes covering registration, homography vs. epipolar geometry, warping boundaries, and multi-band blending.
 - `notebooks/`: Interactive visualizations.
   - `two_image_stitch_demo.ipynb`: Step-by-step breakdown of the 2-image stitching process.
   - `multiple_image_stitch.ipynb`: Demonstration of the multi-image pipeline using both Planar and Cylindrical modes.
@@ -18,7 +18,7 @@ This repository documents a comprehensive learning journey into the world of ima
 
 ## Quick Start
 
-This project uses `uv` for modern, fast dependency management.
+This project uses `uv` for dependency management.
 
 ### Installation
 
@@ -53,9 +53,9 @@ uv run jupyter notebook notebooks/multiple_image_stitch.ipynb
 **Using VS Code:**
 The Python extension will automatically detect the `.venv` directory. Open any notebook and select the `.venv` kernel to run cells natively within the editor.
 
-## Key Features & Learning Outcomes
+## Key pipeline
 
-- **Geometric Alignment:** Understand the difference between Homography (planar) and 2D Translation (cylindrical) models.
-- **Robust Registration:** Implementation of SIFT feature matching with RANSAC-based estimation.
-- **Professional Blending:** Multi-band blending using Laplacian pyramids to eliminate seams and exposure differences.
-- **Seam Finding:** Advanced seam optimization using Distance Transforms.
+- **Registration:** SIFT feature matching with RANSAC-based estimation.
+- **Blending:** Multi-band blending using Laplacian pyramids to eliminate seams and exposure differences.
+- **Seam handling:** seam optimization using Distance Transforms.
+- **Geometric Alignment:** Provides options of Homography (planar) and 2D Translation (cylindrical) models.

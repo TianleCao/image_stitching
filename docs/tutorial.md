@@ -1,14 +1,14 @@
 ---
-title: "Tutorial on Image Stitching: From Theory to Practice"
-description: "A deep dive into homography, warping, and blending for panoramic views."
+title: "Learning notes on Image Stitching: Theory and Practice"
+description: "A dive into homography, warping, and blending for panoramic views."
 date: "Apr 25 2026"
 ---
-# Tutorial on Image Stitching: From Theory to Practice
+# [Source Code](https://github.com/TianleCao/image_stitching.git)
 
-[Source Code](https://github.com/TianleCao/image_stitching.git)
+# Learning notes on Image Stitching: Theory and Practice
 
-This guide explains the core concepts behind our image stitching implementation. We focus on the "why" and "how" of registering, warping, and blending images. 
- **Note: This tutorial primarily discusses the simple case of stitching two images, but the concepts extend to multiple images (see Appendix C).** 
+This guide explains the core concepts behind our image stitching implementation. We focus on the "why" and "how" of registering, warping, and blending images, hopefully to help anyone else who is interested in this topic.
+ **Note: This doc primarily discusses the simple case of stitching two images, but the concepts extend to multiple images (see Appendix C).** 
 
 ## 1. Registering Images
 
@@ -17,7 +17,7 @@ To stitch two images together, we first need to "register" them—that is, figur
 ![Fig 1: Original Images](../imgs/fig1.jpg)
 <br>
 
-1. **Feature Detection**: We use algorithms like SIFT (Scale-Invariant Feature Transform) to find distinctive keypoints (like corners or high-contrast spots) in both images.
+1. **Feature Detection**: We can use algorithms like SIFT (Scale-Invariant Feature Transform) to find distinctive keypoints (like corners or high-contrast spots) in both images.
 2. **Feature Matching**: Each keypoint comes with a "descriptor" (a vector describing its local neighborhood). We match keypoints across images by finding descriptors with the smallest distance (e.g., using K-Nearest Neighbors and Lowe's ratio test).
    
 ```python
@@ -34,7 +34,7 @@ good_matches = [m for m, n in matches if m.distance < n.distance * 0.7]
 ![Fig 2: Feature Matching](../imgs/fig2.jpg)
 <br>
 
-3. **Transformation Estimation**: Given these matching point pairs, we estimate a transformation matrix that maps points from Image 2's coordinate space to Image 1's coordinate space. 
+3. **Transformation Estimation**: Given these matching point pairs, we estimate a transformation matrix (homography) that maps points from Image 2's coordinate space to Image 1's coordinate space. 
 
 ## 2. Why Homography?
 
@@ -59,7 +59,7 @@ Once we have our homography $\mathbf{H}_{2 \to 1}$, we must "warp" Image 2 so it
 To ensure both images fit into a single canvas without cropping:
 1. We calculate the new coordinates of Image 2's corners using $\mathbf{H}_{2 \to 1}$.
 2. We find the global minimum and maximum coordinates ($x_{\min}, y_{\min}$, etc.) across both the original Image 1 and the warped Image 2.
-3. If the minimum $x$ or $y$ is negative, it means the warped image extends to the top or left of Image 1. We must introduce a **Translation Matrix (Offset)** to shift everything into positive coordinates:
+3. (Important) If the minimum $x$ or $y$ is negative, it means the warped image extends to the top or left of Image 1. We must introduce a **Translation Matrix (Offset)** to shift everything into positive coordinates:
 
 $$
 \mathbf{H}_{\text{offset}} = \begin{bmatrix} 1 & 0 & -x_{\min} \\ 0 & 1 & -y_{\min} \\ 0 & 0 & 1 \end{bmatrix}
@@ -91,7 +91,7 @@ warped2 = cv2.warpPerspective(image2, H_final, (canvas_w, canvas_h))
 Once warped, we have two aligned images. To combine them, we need to decide which image to use for each pixel on the canvas. We do this using a **Mask** ($M$).
 
 ### What is a Mask?
-A mask is a grayscale image of the same size as our canvas where:
+A naive mask is a grayscale image of the same size as our canvas where:
 - A value of **1 (White)** means "Use Image 1".
 - A value of **0 (Black)** means "Use Image 2".
 
@@ -104,12 +104,17 @@ final_image = mask * warped1 + (1 - mask) * warped2
 ```
 
 ### Defining the Seam
-For a beginner, the simplest mask is a **Binary Mask** that splits the overlap right down the middle. If Image 1 is on the left and Image 2 is on the right, we find the horizontal center of the overlapping region and create a mask that is 1 to the left of that line and 0 to the right.
+The simplest mask is a **Binary Mask** that splits the overlap right down the middle. If Image 1 is on the left and Image 2 is on the right, we find the horizontal center of the overlapping region and create a mask that is 1 to the left of that line and 0 to the right (below image, left). Using this mask, we get the stitching result (below image, right):
 
 ![Fig 4: Simple Mask and Result](../imgs/fig4.jpg)
 <br>
 
-While simple, this often leaves a visible "seam" because the two images might have slightly different brightness or colors. To solve this, we can use more advanced techniques like Laplacian Pyramids (see Appendix B).
+We are technically done for this task!
+
+Note this mask often leaves a visible "seam" because the two images might have slightly different brightness or colors. To solve this, we can use more advanced techniques like Laplacian Pyramids (see Appendix B).
+
+## Other models
+In addition to homography, there is another plausible model based on cylindrical coordinates. Recall that we are considering the pure rotation case, so motion becomes a simple translation inside the cylindrical coordinate. See Appendix C for more details and a comparison. 
 
 ---
 
@@ -164,7 +169,7 @@ As seen below, Laplacian blending (right) effectively hides the exposure differe
 When stitching more than two images, we have two primary implementation options in this repository:
 
 ### 1. Planar Multi-Image Stitching
-This approach extends the 2-image homography logic. We select a central image as the **"Anchor"** reference and match all other images directly to it.
+This approach extends the 2-image homography logic. We select a central image as the **"Anchor"** reference and match **all other** images directly to it.
 
 ```python
 # Select anchor index
@@ -178,9 +183,7 @@ for i in range(len(images)):
 <br>
 
 **Limitations:**
-- **Range Limitation:** This only works for short sequences (3-5 images). If the first and last images do not overlap with the central anchor, feature matching will fail.
-- **Geometric Distortion:** For wide fields of view, the planar projection causes "infinite stretching" at the edges.
-- **Alignment Strategy:** A more robust strategy for long sequences is **"Chaining"** (matching adjacent pairs $1 \to 2$, $2 \to 3$), but this is prone to "drift" (accumulated errors).
+- **Range Limitation:** This only works for short sequences (3-5 images). If the first and last images do not overlap with the central anchor, feature matching will fail. A more robust strategy for long sequences is **"Chaining"** (matching adjacent pairs $1 \to 2$, $2 \to 3$, so that one could get $1 \to 3$), followed by a spanning tree alike approach, but this is prone to "drift" (accumulated errors) and may give contradictory results if multiple paths exist (e.g., $1 \to 2 \to 4$ and $1 \to 3 \to 4$). The most accurate approach would probably be a joint, nonlinear optimization on the relative motion between frames using all matched points (bundle adjustment alike).
 
 ### 2. Cylindrical Multi-Image Stitching
 This is the ideal model for panoramas taken with a rotating camera. We first project each planar image onto a cylinder before aligning them.
@@ -210,7 +213,9 @@ H = np.array([[1, 0, shift[0]], [0, 1, shift[1]], [0, 0, 1]])
 ![Fig 7: Multi-Image Cylindrical Result](../imgs/fig7.jpg)
 <br>
 
-**Benefits & Limitations:**
-- **Benefit:** Once on the cylinder, the relationship between images becomes a **pure 2D translation** $(dx, dy)$, which is much simpler to estimate and prevents edge stretching.
-- **Limitation (Wavy Boundaries):** The top and bottom edges of the panorama appear wavy because straight lines in the original images become curves on the cylinder. Standard software uses **Auto-Cropping** to fix this.
-- **Limitation (Focal Length):** This method requires an accurate estimate of the camera's focal length ($f$) to project the curves correctly.
+**Benefits**
+- Once on the cylinder, the relationship between images becomes a **pure 2D translation** $(dx, dy)$, which is much simpler to estimate and prevents edge stretching.
+
+**Limitations**
+- **Wavy Boundaries:** The top and bottom edges of the panorama appear wavy because straight lines in the original images become curves on the cylinder.
+- **Focal Length:** This method requires an accurate estimate of the camera's focal length ($f$) to project the curves correctly, as seen in the mathematical model.
