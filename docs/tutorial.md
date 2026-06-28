@@ -62,15 +62,17 @@ To ensure both images fit into a single canvas without cropping:
 3. (Important) If the minimum $x$ or $y$ is negative, it means the warped image extends to the top or left of Image 1. We must introduce a **Translation Matrix (Offset)** to shift everything into positive coordinates:
 
 $$
-\mathbf{H}_{\text{offset}} = \begin{bmatrix} 1 & 0 & -x_{\min} \\ 0 & 1 & -y_{\min} \\ 0 & 0 & 1 \end{bmatrix}
+\mathbf{H}_{\text{offset}} = \begin{bmatrix} 1 & 0 & -x_{\min} \cr 0 & 1 & -y_{\min} \cr 0 & 0 & 1 \end{bmatrix}
 $$
 
 ### Applying the Warps
 
 To warp Image 1 onto the new canvas, we just apply the translation:
+
 $$ \text{Image 1}_{\text{warped}} = \text{warpPerspective}(\text{Image 1}, \mathbf{H}_{\text{offset}}) $$
 
 To warp Image 2, we combine the homography and the translation:
+
 $$ \text{Image 2}_{\text{warped}} = \text{warpPerspective}(\text{Image 2}, \mathbf{H}_{\text{offset}} \mathbf{H}_{2 \to 1}) $$
 
 ```python
@@ -96,6 +98,7 @@ A naive mask is a grayscale image of the same size as our canvas where:
 - A value of **0 (Black)** means "Use Image 2".
 
 The final image $I$ is calculated as:
+
 $$ I = M \cdot I_1 + (1 - M) \cdot I_2 $$
 
 ```python
@@ -124,17 +127,23 @@ Let a 3D point be $\mathbf{P} = [X, Y, Z]^T$.
 A camera projects this 3D point onto a 2D pixel coordinate $\mathbf{p} = [x, y, 1]^T$ (in homogeneous coordinates) using the camera intrinsic matrix $\mathbf{K}$ and its rotation $\mathbf{R}$ and translation $\mathbf{t}$.
 
 If the first camera is at the origin with no rotation, its projection equation is:
-$$ \lambda_1 \mathbf{p}_1 = \mathbf{K}_1 [\mathbf{I} \mid \mathbf{0}] \begin{bmatrix} \mathbf{P} \\ 1 \end{bmatrix} = \mathbf{K}_1 \mathbf{P} $$
+
+$$ \lambda_1 \mathbf{p}_1 = \mathbf{K}_1 [\mathbf{I} \vert \mathbf{0}] \begin{bmatrix} \mathbf{P} \cr 1 \end{bmatrix} = \mathbf{K}_1 \mathbf{P} $$
+
 which gives $\mathbf{P} = \lambda_1 \mathbf{K}_1^{-1} \mathbf{p}_1$.
 
 If the second camera shares the exact same center but is rotated by $\mathbf{R}$, its projection is:
-$$ \lambda_2 \mathbf{p}_2 = \mathbf{K}_2 [\mathbf{R} \mid \mathbf{0}] \begin{bmatrix} \mathbf{P} \\ 1 \end{bmatrix} = \mathbf{K}_2 \mathbf{R} \mathbf{P} $$
+
+$$ \lambda_2 \mathbf{p}_2 = \mathbf{K}_2 [\mathbf{R} \vert \mathbf{0}] \begin{bmatrix} \mathbf{P} \cr 1 \end{bmatrix} = \mathbf{K}_2 \mathbf{R} \mathbf{P} $$
 
 Substituting $\mathbf{P}$ from the first equation into the second:
+
 $$ \lambda_2 \mathbf{p}_2 = \mathbf{K}_2 \mathbf{R} (\lambda_1 \mathbf{K}_1^{-1} \mathbf{p}_1) $$
+
 $$ \frac{\lambda_2}{\lambda_1} \mathbf{p}_2 = (\mathbf{K}_2 \mathbf{R} \mathbf{K}_1^{-1}) \mathbf{p}_1 $$
 
 Since homogeneous coordinates are scale-invariant, the scalar $\frac{\lambda_2}{\lambda_1}$ doesn't change the 2D point. Therefore, the pixels are related by a $3 \times 3$ linear transformation matrix:
+
 $$ \mathbf{H} = \mathbf{K}_2 \mathbf{R} \mathbf{K}_1^{-1} $$
 
 This proves that for pure camera rotation, the mapping between the two images is purely a homography $\mathbf{H}$, entirely independent of the depth $Z$ of the 3D point $\mathbf{P}$!
